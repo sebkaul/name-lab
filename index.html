@@ -32,6 +32,10 @@
   #guihint::after { content:"→"; display:inline-block; margin-left:6px; color:var(--accent); animation:nudge 1.2s ease-in-out infinite; }
   @keyframes nudge { 50% { transform:translateX(4px) } }
   @media (max-width:640px) { #guihint { top:34px; right:20px; } #guihint::after { content:"↑"; animation-name:nudge-up; } }
+  #keys { position:absolute; right:28px; bottom:26px; font-size:11px; }
+  #keys .t { display:none; }
+  @media (pointer:coarse), (max-width:640px) { #keys .k { display:none; } #keys .t { display:inline; } }
+  @media (max-width:640px) { #keys { top:40px; bottom:auto; left:28px; right:auto; } }
   @keyframes nudge-up { 50% { transform:translateY(-4px) } }
   #sig { position:absolute; right:13%; top:52%; font-style:italic; font-size:clamp(24px,3vw,38px); transform:rotate(-6deg); opacity:.85; }
   #pair { position:absolute; left:28px; bottom:26px; display:grid; gap:6px; }
@@ -67,6 +71,7 @@
   </div>
   <div id="status">loading…</div>
   <div id="guihint">play with it</div>
+  <div id="keys" class="mono"><span class="k"><b>space</b>/<b>click</b> replay   <b>R</b> reroll   <b>↑ ↓</b> font</span><span class="t"><b>tap</b> replay</span></div>
 </div>
 <script type="module">
 import * as THREE from "three";
@@ -106,16 +111,18 @@ const PALETTES = {
   "Old terminal":     ["#0d0d0b", "#deded0", "#6a6a60", "#deded0", "#e8883a", "#a8d672"],
 };
 const DEFAULTS = {
-  text: "Sebastian Kaul", font: "telma", treatment: "solid", depth: 1.6, bevel: 0.29, material: "glow",
+  // the long sample only stays legible on wide screens
+  text: innerWidth >= 1100 ? "Five boxing wizards jump quickly" : "Add your text", font: "telma", treatment: "solid", depth: 1.6, bevel: 0.29, material: "glow",
   anim: "type & pop", seed: 5560, chaos: 0, springiness: 1, settle: "loose", settleAmount: 0.25, drift: 2, speed: 1.15,
   palette: "Paper (light)", bg: "#efede6", bgStyle: "radial", textColor: "#151513", dim: "#77746a",
   face: "#1a1a18", side: "#8f8b80", accent: "#2b2bff", grain: 0.2, vignette: 0.58, bloom: 0.24,
   yaw: 1, pitch: 1, fov: 29, mouseTilt: 0.3, hoverPush: 1,
-  context: "finale", heading: "syne", body: "zodiak", mono: "IBM Plex Mono",
+  context: "none", heading: "syne", body: "zodiak", mono: "IBM Plex Mono",
 };
 const S = { ...DEFAULTS };
 try { Object.assign(S, JSON.parse(localStorage.getItem("namelab2") || "{}")); } catch {}
-S.context = DEFAULTS.context; // always open on "Get in touch"; a ?context= param still overrides
+// always open on the sample text in the plain view; ?text= and ?context= still override
+S.text = DEFAULTS.text; S.context = DEFAULTS.context;
 for (const [k, v] of new URLSearchParams(location.search)) if (k in S) S[k] = typeof DEFAULTS[k] === "number" ? +v : v;
 const save = () => { try { localStorage.setItem("namelab2", JSON.stringify(S)); } catch {} };
 const inv = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [v, k]));
@@ -174,6 +181,7 @@ gui.add({ copy() {
   navigator.clipboard?.writeText(json).then(() => flash("settings copied, paste them to Claude"), () => prompt("Copy these settings:", json));
 } }, "copy").name("📋 copy settings for Claude");
 gui.add({ reset() { try { localStorage.removeItem("namelab2"); } catch {} location.href = location.pathname; } }, "reset").name("reset everything");
+gui.folders.forEach(f => f.close());
 gui.onChange(save);
 function flash(msg) { status.textContent = msg; setTimeout(() => status.textContent = DISPLAY[S.font], 2500); }
 
