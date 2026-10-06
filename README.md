@@ -34,5 +34,10 @@ Settings are saved in localStorage; "reset everything" clears them.
 ## Fonts
 
 The fonts come from [Fontshare](https://www.fontshare.com) (ITF Free Font License) and
-[Google Fonts](https://fonts.google.com) (OFL). They are downloaded by the script and not
+[Google Fonts](https://fonts.google.com) (SIL OFL). They are downloaded by the script and not
 redistributed in this repository.
+
+## Licence
+
+The code is under the [MIT licence](LICENSE). The fonts are not: each keeps its own licence
+(ITF Free Font License or SIL OFL, see above).
