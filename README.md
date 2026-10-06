@@ -31,6 +31,19 @@ Add `?at=4` to the URL to fast-forward the animation by 4 seconds (useful for
 screenshots); any setting can also be passed as a URL parameter, e.g. `?font=excon`.
 Settings are saved in localStorage; "reset everything" clears them.
 
+## Deploy (server)
+
+```sh
+git clone https://github.com/sebkaul/name-lab.git
+cd name-lab
+scripts/deploy.sh                          # publishes to /srv/http/namelab
+WEBROOT=/var/www/namelab scripts/deploy.sh # or somewhere else
+```
+
+Needs `git`, `curl` and `rsync`. `deploy.sh` pulls the latest commit, runs
+`fetch-fonts.sh`, stages `index.html`, `fonts.html` and `fonts/`, and only then syncs
+them to the web root. nginx config: [`nginx/namelab.sebk.no.conf`](nginx/namelab.sebk.no.conf).
+
 ## Fonts
 
 The fonts come from [Fontshare](https://www.fontshare.com) (ITF Free Font License) and
