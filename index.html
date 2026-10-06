@@ -8,11 +8,12 @@
   :root { --bg:#0b0b0a; --text:#e6e4da; --dim:#8a877c; --accent:#e6e4da; --head:"lab-telma"; --body:"body-zodiak"; --mono:"Commit Mono"; }
   html, body { height:100%; margin:0; }
   body { background:var(--bg); color:var(--text); overflow:hidden; font-family:var(--body), serif; }
-  /* the stage sits beside the open panel instead of under it */
-  #stage { position:fixed; inset:0; overflow:hidden; transition:right .35s ease, top .35s ease; }
-  body.panel-open #stage { right:305px; }
+  #stage { position:fixed; inset:0; overflow:hidden; }
+  /* the background fills the window; the name and overlays move beside the open panel */
+  #ctx { transition:right .35s ease, top .35s ease; }
+  body.panel-open #ctx { right:305px; }
   @media (max-width:640px) {
-    body.panel-open #stage { right:0; top:var(--panel-h, 55vh); }
+    body.panel-open #ctx { right:0; top:var(--panel-h, 55vh); }
   }
   canvas { display:block; width:100%; height:100%; }
   .ov { position:absolute; inset:0; pointer-events:none; }
@@ -46,14 +47,15 @@
   #pair { position:absolute; left:28px; bottom:26px; display:grid; gap:6px; }
   #pair .h { font-family:var(--head); font-size:clamp(24px,3.4vw,42px); line-height:1.1; }
   #pair .s { font-family:var(--body); font-style:italic; font-size:clamp(16px,1.8vw,22px); opacity:.85; }
-  #status { position:absolute; right:28px; top:34px; font:12px var(--mono), monospace; color:var(--dim); text-align:right; }
+  #status { position:absolute; left:28px; top:18px; font:12px var(--mono), monospace; color:var(--dim); }
   #status b { color:var(--accent); font-weight:400; }
   .lil-gui.root { max-height:100vh; overflow-y:auto; --width:290px; }
   [hidden] { display:none !important; }
-  /* phones: full-width panel; the hint sits under its title, so the font label goes below it */
+  /* phones: full-width panel, so the labels move below its title bar while it's closed */
   @media (max-width:640px) {
     .lil-gui.root { --width:calc(100vw - 30px); max-height:55vh; }
-    #status { top:58px; } body.panel-open #status { top:18px; }
+    body:not(.panel-open) #status { top:34px; }
+    body:not(.panel-open) #keys { top:56px; }
   }
 </style>
 <script type="importmap">
@@ -79,10 +81,10 @@
     <div data-ctx="finale" class="mono" id="links"></div>
     <div data-ctx="finale" id="sig">Sebastian</div>
     <div data-ctx="none" id="pair"><div class="h">Chemistry, Linux, satellites.</div><div class="s">The same atoms, rearranged.</div><div class="mono">sebastian@sebk ~ ❯ ls -l ~/links   <b>orbit -> orbitntnu.com</b></div></div>
+    <div id="status">loading…</div>
+    <div id="keys" class="mono"><span class="k"><b>space</b>/<b>click</b> replay   <b>R</b> reroll   <b>↑ ↓</b> font</span><span class="t"><b>tap</b> replay</span></div>
   </div>
-  <div id="status">loading…</div>
   <div id="guihint">play with it</div>
-  <div id="keys" class="mono"><span class="k"><b>space</b>/<b>click</b> replay   <b>R</b> reroll   <b>↑ ↓</b> font</span><span class="t"><b>tap</b> replay</span></div>
 </div>
 <script type="module">
 import * as THREE from "three";
@@ -145,26 +147,28 @@ const gui = new GUI({ title: "Name lab" }).close();
 const guiHint = document.getElementById("guihint");
 const syncHint = () => { guiHint.hidden = !gui._closed; document.body.classList.toggle("panel-open", !gui._closed); };
 gui.$title.addEventListener("click", syncHint);
-// on phones the stage starts where the panel ends, and follows it as folders open and close
+// on phones the name's area starts where the panel ends, and follows it as folders open and close
 new ResizeObserver(() => document.body.style.setProperty("--panel-h", gui.domElement.offsetHeight + "px")).observe(gui.domElement);
 guiHint.addEventListener("click", () => { gui.openAnimated(); syncHint(); });
 // every control updates live; the heavier ones are debounced so dragging stays smooth
 const debounce = (fn, ms) => { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
-const liveRebuild = debounce(() => rebuild(), 120), liveReplay = debounce(() => replay(), 150);
+const liveRebuild = debounce(() => rebuild(), 120);
+// motion settings only show on the next replay, so say how to get one
+const motionHint = () => flash("space / click to replay");
 const fName = gui.addFolder("Name");
 fName.add(S, "text").onChange(liveRebuild);
-fName.add(S, "font", inv(DISPLAY)).onChange(rebuild).listen();
-fName.add(S, "treatment", ["solid", "molecular", "cells"]).onChange(rebuild);
-fName.add(S, "material", ["matte", "gloss", "chrome", "glass", "glow"]).onChange(rebuild);
+fName.add(S, "font", inv(DISPLAY)).onChange(() => rebuild()).listen();
+fName.add(S, "treatment", ["solid", "molecular", "cells"]).onChange(() => rebuild());
+fName.add(S, "material", ["matte", "gloss", "chrome", "glass", "glow"]).onChange(() => rebuild());
 fName.add(S, "depth", 0.2, 6, 0.1).onChange(liveRebuild);
 fName.add(S, "bevel", 0, 0.5, 0.01).onChange(liveRebuild);
 const fMotion = gui.addFolder("Motion");
-fMotion.add(S, "anim", ["shockwave", "tumble drop", "type & pop", "assemble"]).name("animation").onChange(replay);
-fMotion.add(S, "seed", 1, 9999, 1).onChange(liveReplay).listen();
-fMotion.add(S, "chaos", 0, 3, 0.05).name("chaos / randomness").onChange(liveReplay);
-fMotion.add(S, "springiness", 0, 1, 0.01).name("springiness (goofy ↔ calm = 1 ↔ 0)").onChange(liveReplay);
-fMotion.add(S, "settle", ["loose", "aligned", "wave"]).name("settle pose").onChange(replay);
-fMotion.add(S, "settleAmount", 0, 2, 0.05).name("settle amount").onChange(liveReplay);
+fMotion.add(S, "anim", ["shockwave", "tumble drop", "type & pop", "assemble"]).name("animation").onChange(motionHint);
+fMotion.add(S, "seed", 1, 9999, 1).onChange(motionHint).listen();
+fMotion.add(S, "chaos", 0, 3, 0.05).name("chaos / randomness").onChange(motionHint);
+fMotion.add(S, "springiness", 0, 1, 0.01).name("springiness (goofy ↔ calm = 1 ↔ 0)").onChange(motionHint);
+fMotion.add(S, "settle", ["loose", "aligned", "wave"]).name("settle pose").onChange(motionHint);
+fMotion.add(S, "settleAmount", 0, 2, 0.05).name("settle amount").onChange(motionHint);
 fMotion.add(S, "drift", 0, 2, 0.05).name("idle drift");
 fMotion.add(S, "speed", 0.2, 2, 0.05).name("time scale");
 fMotion.add({ replay }, "replay").name("▶ replay (space)");
@@ -188,7 +192,7 @@ fCam.add(S, "fov", 12, 60, 1).onChange(resize);
 fCam.add(S, "mouseTilt", 0, 1, 0.01).name("mouse tilt (whole name)");
 fCam.add(S, "hoverPush", 0, 3, 0.05).name("cursor push (per letter)");
 const fType = gui.addFolder("Context & type pairing");
-fType.add(S, "context", { "none (pairing strip)": "none", "hero (first screen)": "hero", "finale (get in touch)": "finale" }).onChange(rebuild);
+fType.add(S, "context", { "none (pairing strip)": "none", "hero (first screen)": "hero", "finale (get in touch)": "finale" }).onChange(() => rebuild());
 fType.add(S, "heading", inv(DISPLAY)).name("heading font").onChange(applyType);
 fType.add(S, "body", inv(BODY)).name("body font").onChange(applyType);
 fType.add(S, "mono", Object.keys(MONO)).name("mono font").onChange(applyType);
@@ -234,7 +238,7 @@ function applyType() {
 }
 
 // ---------- three ----------
-const canvas = document.getElementById("c"), stage = document.getElementById("stage");
+const canvas = document.getElementById("c"), ctxEl = document.getElementById("ctx");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.toneMapping = THREE.NeutralToneMapping;
@@ -370,7 +374,9 @@ function buildLetter(glyph) {
 }
 
 let letters = [], layoutWidth = 1, t0 = 0, simT = 0;
-async function rebuild() {
+// Rebuilds the letters. Only the first load animates; later rebuilds (text, font, look)
+// jump straight to the settled pose, so the motion only plays on click / space / R.
+async function rebuild(animate = false) {
   try {
     document.querySelectorAll("[data-ctx]").forEach(el => el.hidden = el.dataset.ctx !== S.context);
     const { font } = await loadTTF(S.font);
@@ -395,7 +401,7 @@ async function rebuild() {
     root.position.y = { none: 2.5, hero: 1.2, finale: 4 }[S.context];
     resize(); replay();
     // ?at=<seconds> fast-forwards the animation (used for screenshots).
-    const at = +new URLSearchParams(location.search).get("at");
+    const at = animate ? +new URLSearchParams(location.search).get("at") : 4 + Math.max(0, ...letters.map(L => L.delay));
     if (at) for (let i = 0; i < at * 240; i++) { simT += 1 / 240; for (const L of letters) step(L, 1 / 240, simT); }
   } catch (e) { status.textContent = e.message; console.error(e); }
 }
@@ -468,15 +474,17 @@ function step(L, dt, t) {
 // ---------- loop ----------
 const mouse = new THREE.Vector2();
 const ndc = new THREE.Vector2(9, 9), lastNdc = new THREE.Vector2(9, 9), raycaster = new THREE.Raycaster();
+let overStage = false;
 addEventListener("pointermove", e => {
-  const r = stage.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
-  ndc.set(x * 2, -y * 2); // beyond ±1 over the panel, so the letters ignore it
+  const r = ctxEl.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
+  overStage = Math.abs(x) <= 0.5 && Math.abs(y) <= 0.5; // not over the panel
+  ndc.set(e.clientX / innerWidth * 2 - 1, 1 - e.clientY / innerHeight * 2);
   mouse.set(THREE.MathUtils.clamp(x, -0.5, 0.5), THREE.MathUtils.clamp(y, -0.5, 0.5));
 });
 // A letter the cursor touches gets pushed in the direction the cursor moves, then springs back.
 function hoverPush(dt) {
   const v = ndc.clone().sub(lastNdc).divideScalar(Math.max(dt, 1e-3)); lastNdc.copy(ndc);
-  if (!S.hoverPush || Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1) return;
+  if (!S.hoverPush || !overStage) return;
   raycaster.setFromCamera(ndc, camera);
   const hit = raycaster.intersectObjects(root.children, true)[0];
   if (!hit) return;
@@ -488,13 +496,16 @@ function hoverPush(dt) {
   L.cool = simT + 0.2;
 }
 canvas.addEventListener("click", replay);
+let canvasSize = "";
 function resize() {
-  const w = stage.clientWidth, h = stage.clientHeight;
-  renderer.setSize(w, h, false); composer.setSize(w, h); camera.aspect = w / h; camera.fov = S.fov;
-  camera.updateProjectionMatrix();
+  const W = innerWidth, H = innerHeight, r = ctxEl.getBoundingClientRect();
+  if (canvasSize !== W + "x" + H) { canvasSize = W + "x" + H; renderer.setSize(W, H, false); composer.setSize(W, H); }
+  // The camera frames the overlay's area (beside the panel) while the canvas keeps covering the window.
+  camera.fov = S.fov;
+  camera.setViewOffset(r.width, r.height, -r.left, -r.top, W, H);
 }
-// follows window resizes and the stage morphing as the panel opens and closes
-new ResizeObserver(resize).observe(stage);
+// follows window resizes and the overlay morphing as the panel opens and closes
+new ResizeObserver(resize).observe(ctxEl);
 const clock = new THREE.Clock(), DEBUG = new URLSearchParams(location.search).has('debug'); let frame = 0;
 renderer.setAnimationLoop(() => {
   const real = Math.min(clock.getDelta(), 1 / 30), dt = real * S.speed;
@@ -533,7 +544,7 @@ document.getElementById("links").innerHTML = `~ ❯ ls -l ~/contact
 <b>linkedin</b> -> <a href="https://www.linkedin.com/in/sebkaul" target="_blank" rel="noopener">linkedin.com/in/sebkaul</a>
 <b>cv</b>       -> <a href="https://cv.sebk.no" target="_blank" rel="noopener">cv.sebk.no</a>`;
 
-applyType(); applyLook(); rebuild();
+applyType(); applyLook(); rebuild(true);
 window.__lab = { S, replay, rebuild };
 </script>
 </body>
