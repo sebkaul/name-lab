@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Name lab</title>
+<style>
+  :root { --bg:#0b0b0a; --text:#e6e4da; --dim:#8a877c; --accent:#e6e4da; --head:"lab-telma"; --body:"body-zodiak"; --mono:"Commit Mono"; }
+  html, body { height:100%; margin:0; }
+  body { background:var(--bg); color:var(--text); overflow:hidden; font-family:var(--body), serif; }
+  #stage { position:fixed; inset:0; }
+  canvas { display:block; width:100%; height:100%; }
+  .ov { position:absolute; inset:0; pointer-events:none; }
+  #grain { inset:-10%; mix-blend-mode:overlay; animation:grain .3s steps(3) infinite;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+  @keyframes grain { 0% { transform:translate(0,0) } 33% { transform:translate(-3%,2%) } 66% { transform:translate(2%,-3%) } }
+  #vig { background:radial-gradient(ellipse at center, transparent 45%, #000 135%); }
+  .mono { font-family:var(--mono), monospace; font-size:12px; line-height:1.5; color:var(--dim); white-space:pre; }
+  .mono b { color:var(--accent); font-weight:400; }
+  .br { position:absolute; width:18px; height:18px; border:0 solid var(--dim); opacity:.6; }
+  .br.tl { top:18px; left:18px; border-width:1px 0 0 1px } .br.tr { top:18px; right:18px; border-width:1px 1px 0 0 }
+  .br.bl { bottom:18px; left:18px; border-width:0 0 1px 1px } .br.br_ { bottom:18px; right:18px; border-width:0 1px 1px 0 }
+  #ff { position:absolute; top:46px; left:46px; }
+  #tag { position:absolute; left:50%; bottom:23%; transform:translateX(-50%); width:90%; text-align:center; font-style:italic; font-size:clamp(18px,2.3vw,28px); }
+  #hint { position:absolute; left:50%; bottom:40px; transform:translateX(-50%); }
+  #toggles { position:absolute; top:42px; right:46px; display:flex; gap:14px; align-items:center; }
+  .pol { width:15px; height:15px; border:1px solid var(--dim); border-radius:50%; background:repeating-linear-gradient(90deg, var(--dim) 0 1px, transparent 1px 4px); }
+  #links { position:absolute; left:50%; top:63%; transform:translateX(-50%); font-size:14px; }
+  #sig { position:absolute; right:13%; top:52%; font-style:italic; font-size:clamp(24px,3vw,38px); transform:rotate(-6deg); opacity:.85; }
+  #pair { position:absolute; left:28px; bottom:26px; display:grid; gap:6px; }
+  #pair .h { font-family:var(--head); font-size:clamp(24px,3.4vw,42px); line-height:1.1; }
+  #pair .s { font-family:var(--body); font-style:italic; font-size:clamp(16px,1.8vw,22px); opacity:.85; }
+  #status { position:absolute; left:28px; top:18px; font:12px system-ui, sans-serif; color:var(--dim); }
+  .lil-gui.root { max-height:100vh; overflow-y:auto; --width:290px; }
+  [hidden] { display:none !important; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/",
+  "opentype": "https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.module.js",
+  "lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.19.2/dist/lil-gui.esm.min.js"
+} }
+</script>
+</head>
+<body>
+<div id="stage">
+  <canvas id="c"></canvas>
+  <div class="ov" id="vig"></div>
+  <div class="ov" id="grain"></div>
+  <div class="ov" id="ctx">
+    <div class="br tl"></div><div class="br tr"></div><div class="br bl"></div><div class="br br_"></div>
+    <div data-ctx="hero" class="mono" id="ff"></div>
+    <div data-ctx="hero" id="toggles" class="mono"><span>NO / <b>EN</b></span><span class="pol"></span></div>
+    <div data-ctx="hero" id="tag">Chemical engineering, Linux and satellites.</div>
+    <div data-ctx="hero" class="mono" id="hint">scroll ↓</div>
+    <div data-ctx="finale" class="mono" id="links"></div>
+    <div data-ctx="finale" id="sig">Sebastian</div>
+    <div data-ctx="none" id="pair"><div class="h">Chemistry, Linux, satellites.</div><div class="s">The same atoms, rearranged.</div><div class="mono">sebastian@sebk ~ ❯ ls -l ~/links   <b>orbit -> orbitntnu.com</b></div></div>
+  </div>
+  <div id="status">loading…</div>
+</div>
+<script type="module">
+import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import opentype from "opentype";
+import GUI from "lil-gui";
+
+// ---------- data ----------
+const DISPLAY = {
+  telma: "Telma", tanker: "Tanker", excon: "Excon", alpino: "Alpino", technor: "Technor", boxing: "Boxing",
+  kola: "Kola", nippo: "Nippo", stardom: "Stardom", melodrama: "Melodrama", "bespoke-stencil": "Bespoke Stencil",
+  aktura: "Aktura", array: "Array", neco: "Neco", "clash-grotesk": "Clash Grotesk", boska: "Boska",
+  syne: "Syne", "climate-crisis": "Climate Crisis", "bowlby-one": "Bowlby One", "dela-gothic-one": "Dela Gothic One",
+  "rubik-mono-one": "Rubik Mono One", monoton: "Monoton", bungee: "Bungee", "tilt-warp": "Tilt Warp",
+  orbitron: "Orbitron", michroma: "Michroma", "major-mono-display": "Major Mono Display",
+  "big-shoulders-display": "Big Shoulders Display", unbounded: "Unbounded", "bagel-fat-one": "Bagel Fat One",
+};
+const BODY = {
+  zodiak: "Zodiak (italic)", gambetta: "Gambetta (italic)", sentient: "Sentient (italic)", erode: "Erode (italic)",
+  "instrument-serif": "Instrument Serif (italic)", fraunces: "Fraunces (italic)", newsreader: "Newsreader (italic)",
+  satoshi: "Satoshi", "general-sans": "General Sans", switzer: "Switzer",
+};
+const MONO = { "Commit Mono": "commit-mono", "JetBrains Mono": "jetbrains-mono", "Geist Mono": "geist-mono", "IBM Plex Mono": "ibm-plex-mono" };
+// Concept-driven palettes: bg, text, dim, letter face, letter sides / bonds, accent.
+const PALETTES = {
+  "Bone on ink":      ["#0b0b0a", "#e6e4da", "#8a877c", "#e6e4da", "#5f5d55", "#e6e4da"],
+  "Spearmint":        ["#07100d", "#e3efe9", "#7d968b", "#e8f3ee", "#2f9e7a", "#7fe0c0"],
+  "Caraway":          ["#100c08", "#efe6d8", "#9a8a73", "#f1e8da", "#a8682a", "#e0a458"],
+  "Polariser violet": ["#0a0912", "#e7e4f5", "#8a85a6", "#eeebff", "#5a3df0", "#9b85ff"],
+  "Cold CO₂":         ["#070b10", "#e2ecf5", "#7f93a6", "#f2f6fa", "#3f6f9e", "#9cc9ff"],
+  "Oregano":          ["#0c0d08", "#e8e8d8", "#8d8f78", "#ecebdc", "#6c7a2e", "#b7c46a"],
+  "Paper (light)":    ["#efede6", "#151513", "#77746a", "#1a1a18", "#8f8b80", "#2b2bff"],
+  "Old terminal":     ["#0d0d0b", "#deded0", "#6a6a60", "#deded0", "#e8883a", "#a8d672"],
+};
+const DEFAULTS = {
+  text: "Sebastian Kaul", font: "telma", treatment: "solid", depth: 1.6, bevel: 0.29, material: "glow",
+  anim: "type & pop", seed: 5560, chaos: 0, springiness: 1, settle: "loose", settleAmount: 0.25, drift: 2, speed: 1.15,
+  palette: "Paper (light)", bg: "#efede6", bgStyle: "radial", textColor: "#151513", dim: "#77746a",
+  face: "#1a1a18", side: "#8f8b80", accent: "#2b2bff", grain: 0.2, vignette: 0.58, bloom: 0.24,
+  yaw: 1, pitch: 1, fov: 29, mouseTilt: 0.3, hoverPush: 1,
+  context: "finale", heading: "syne", body: "zodiak", mono: "IBM Plex Mono",
+};
+const S = { ...DEFAULTS };
+try { Object.assign(S, JSON.parse(localStorage.getItem("namelab2") || "{}")); } catch {}
+for (const [k, v] of new URLSearchParams(location.search)) if (k in S) S[k] = typeof DEFAULTS[k] === "number" ? +v : v;
+const save = () => { try { localStorage.setItem("namelab2", JSON.stringify(S)); } catch {} };
+const inv = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [v, k]));
+const status = document.getElementById("status");
+
+// ---------- GUI ----------
+const gui = new GUI({ title: "Name lab" });
+const fName = gui.addFolder("Name");
+fName.add(S, "text").onFinishChange(rebuild);
+fName.add(S, "font", inv(DISPLAY)).onChange(rebuild).listen();
+fName.add(S, "treatment", ["solid", "molecular", "cells"]).onChange(rebuild);
+fName.add(S, "material", ["matte", "gloss", "chrome", "glass", "glow"]).onChange(rebuild);
+fName.add(S, "depth", 0.2, 6, 0.1).onFinishChange(rebuild);
+fName.add(S, "bevel", 0, 0.5, 0.01).onFinishChange(rebuild);
+const fMotion = gui.addFolder("Motion");
+fMotion.add(S, "anim", ["shockwave", "tumble drop", "type & pop", "assemble"]).name("animation").onChange(replay);
+fMotion.add(S, "seed", 1, 9999, 1).onFinishChange(replay).listen();
+fMotion.add(S, "chaos", 0, 3, 0.05).name("chaos / randomness").onFinishChange(replay);
+fMotion.add(S, "springiness", 0, 1, 0.01).name("springiness (goofy ↔ calm = 1 ↔ 0)").onFinishChange(replay);
+fMotion.add(S, "settle", ["loose", "aligned", "wave"]).name("settle pose").onChange(replay);
+fMotion.add(S, "settleAmount", 0, 2, 0.05).name("settle amount").onFinishChange(replay);
+fMotion.add(S, "drift", 0, 2, 0.05).name("idle drift");
+fMotion.add(S, "speed", 0.2, 2, 0.05).name("time scale");
+fMotion.add({ replay }, "replay").name("▶ replay (space)");
+fMotion.add({ reroll }, "reroll").name("🎲 reroll seed (R)");
+const fLook = gui.addFolder("Look");
+fLook.add(S, "palette", Object.keys(PALETTES)).onChange(applyPalette);
+fLook.addColor(S, "bg").onChange(applyLook).listen();
+fLook.add(S, "bgStyle", ["flat", "radial", "vertical"]).name("background style").onChange(applyLook);
+fLook.addColor(S, "textColor").name("text").onChange(applyLook).listen();
+fLook.addColor(S, "dim").name("dim text").onChange(applyLook).listen();
+fLook.addColor(S, "face").name("letter face").onFinishChange(rebuild).listen();
+fLook.addColor(S, "side").name("letter sides / bonds").onFinishChange(rebuild).listen();
+fLook.addColor(S, "accent").onChange(applyLook).listen();
+fLook.add(S, "grain", 0, 0.5, 0.01).onChange(applyLook);
+fLook.add(S, "vignette", 0, 1, 0.01).onChange(applyLook);
+fLook.add(S, "bloom", 0, 2, 0.01).onChange(applyLook);
+const fCam = gui.addFolder("Camera");
+fCam.add(S, "yaw", -50, 50, 1).name("yaw °");
+fCam.add(S, "pitch", -35, 35, 1).name("pitch °");
+fCam.add(S, "fov", 12, 60, 1).onChange(resize);
+fCam.add(S, "mouseTilt", 0, 1, 0.01).name("mouse tilt (whole name)");
+fCam.add(S, "hoverPush", 0, 3, 0.05).name("cursor push (per letter)");
+const fType = gui.addFolder("Context & type pairing");
+fType.add(S, "context", { "none (pairing strip)": "none", "hero (first screen)": "hero", "finale (get in touch)": "finale" }).onChange(rebuild);
+fType.add(S, "heading", inv(DISPLAY)).name("heading font").onChange(applyType);
+fType.add(S, "body", inv(BODY)).name("body font").onChange(applyType);
+fType.add(S, "mono", Object.keys(MONO)).name("mono font").onChange(applyType);
+gui.add({ copy() {
+  const json = JSON.stringify(S);
+  navigator.clipboard?.writeText(json).then(() => flash("settings copied, paste them to Claude"), () => prompt("Copy these settings:", json));
+} }, "copy").name("📋 copy settings for Claude");
+gui.add({ reset() { try { localStorage.removeItem("namelab2"); } catch {} location.href = location.pathname; } }, "reset").name("reset everything");
+gui.onChange(save);
+function flash(msg) { status.textContent = msg; setTimeout(() => status.textContent = DISPLAY[S.font], 2500); }
+
+addEventListener("keydown", e => {
+  if (e.target.closest?.(".lil-gui") && e.target.tagName === "INPUT") return;
+  if (e.code === "Space") { e.preventDefault(); replay(); }
+  if (e.key === "r" || e.key === "R") reroll();
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    const ids = Object.keys(DISPLAY), i = ids.indexOf(S.font);
+    S.font = ids[(i + (e.key === "ArrowDown" ? 1 : ids.length - 1)) % ids.length]; save(); rebuild();
+  }
+});
+
+// ---------- fonts ----------
+const parsed = {}, faces = {};
+const loadTTF = id => parsed[id] ??= fetch(`fonts/${id}.ttf`).then(r => {
+  if (!r.ok) throw new Error(`fonts/${id}.ttf missing: run scripts/fetch-fonts.sh`);
+  return r.arrayBuffer();
+}).then(b => ({ buf: b, font: opentype.parse(b) }));
+function cssFont(family, src, desc) {
+  if (faces[family]) return faces[family];
+  return faces[family] = (typeof src === "string" ? Promise.resolve(src) : src.then(x => x.buf))
+    .then(s => new FontFace(family, typeof s === "string" ? `url(${s})` : s, desc).load())
+    .then(f => document.fonts.add(f)).catch(() => {});
+}
+function applyType() {
+  cssFont(`lab-${S.heading}`, loadTTF(S.heading));
+  cssFont(`body-${S.body}`, loadTTF(S.body), { style: BODY[S.body].includes("italic") ? "italic" : "normal" });
+  cssFont(S.mono, `https://cdn.jsdelivr.net/npm/@fontsource/${MONO[S.mono]}/files/${MONO[S.mono]}-latin-400-normal.woff2`);
+  const r = document.documentElement.style;
+  r.setProperty("--head", `"lab-${S.heading}"`); r.setProperty("--body", `"body-${S.body}"`); r.setProperty("--mono", `"${S.mono}"`);
+}
+
+// ---------- three ----------
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.NeutralToneMapping;
+const scene = new THREE.Scene();
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.7;
+const camera = new THREE.PerspectiveCamera(S.fov, 1, 0.1, 400);
+const key = new THREE.DirectionalLight("#ffffff", 2); key.position.set(-6, 8, 10); scene.add(key);
+const rim = new THREE.PointLight("#ffffff", 260, 70); rim.position.set(12, -5, -8); scene.add(rim);
+const root = new THREE.Group(); scene.add(root);
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), S.bloom, 0.55, 0.72);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+function applyPalette() {
+  [S.bg, S.textColor, S.dim, S.face, S.side, S.accent] = PALETTES[S.palette];
+  save(); applyLook(); rebuild();
+}
+function applyLook() {
+  const r = document.documentElement.style;
+  r.setProperty("--bg", S.bg); r.setProperty("--text", S.textColor); r.setProperty("--dim", S.dim); r.setProperty("--accent", S.accent);
+  document.getElementById("grain").style.opacity = S.grain;
+  document.getElementById("vig").style.opacity = S.vignette;
+  bloom.strength = S.bloom;
+  const c = document.createElement("canvas"); c.width = c.height = 512;
+  const x = c.getContext("2d"), base = new THREE.Color(S.bg), light = base.getHSL({}).l > 0.5;
+  const hi = "#" + base.clone().offsetHSL(0, 0, light ? 0.025 : 0.055).getHexString();
+  const lo = "#" + base.clone().offsetHSL(0, 0, light ? -0.04 : -0.02).getHexString();
+  if (S.bgStyle === "flat") { x.fillStyle = S.bg; x.fillRect(0, 0, 512, 512); }
+  else {
+    const g = S.bgStyle === "radial" ? x.createRadialGradient(256, 230, 0, 256, 256, 380) : x.createLinearGradient(0, 0, 0, 512);
+    g.addColorStop(0, hi); g.addColorStop(0.55, S.bg); g.addColorStop(1, lo);
+    x.fillStyle = g; x.fillRect(0, 0, 512, 512);
+  }
+  scene.background?.dispose?.();
+  scene.background = Object.assign(new THREE.CanvasTexture(c), { colorSpace: THREE.SRGBColorSpace });
+}
+
+// Glyph outline -> shapes. Holes are found by containment, so TrueType and CFF winding both work.
+function glyphContours(glyph, size) {
+  const out = []; let cur = null;
+  for (const c of glyph.getPath(0, 0, size).commands) {
+    if (c.type === "M") { cur = new THREE.Path(); cur.moveTo(c.x, -c.y); out.push(cur); }
+    else if (c.type === "L") cur.lineTo(c.x, -c.y);
+    else if (c.type === "Q") cur.quadraticCurveTo(c.x1, -c.y1, c.x, -c.y);
+    else if (c.type === "C") cur.bezierCurveTo(c.x1, -c.y1, c.x2, -c.y2, c.x, -c.y);
+  }
+  return out.map(p => p.getPoints(10)).filter(p => p.length > 2);
+}
+function inside(pt, poly) {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++)
+    if ((poly[i].y > pt.y) !== (poly[j].y > pt.y) && pt.x < (poly[j].x - poly[i].x) * (pt.y - poly[i].y) / (poly[j].y - poly[i].y) + poly[i].x) c = !c;
+  return c;
+}
+function toShapes(contours) {
+  const info = contours.map(pts => ({ pts, area: Math.abs(THREE.ShapeUtils.area(pts)) }));
+  for (const a of info) a.parents = info.filter(b => b !== a && b.area > a.area && inside(a.pts[0], b.pts));
+  const shapes = [];
+  for (const a of info) if (a.parents.length % 2 === 0) { a.shape = new THREE.Shape(a.pts); shapes.push(a.shape); }
+  for (const a of info) if (a.parents.length % 2 === 1) {
+    const p = a.parents.filter(b => b.shape).sort((x, y) => x.area - y.area)[0];
+    if (p) p.shape.holes.push(new THREE.Path(a.pts));
+  }
+  return shapes;
+}
+function resample(pts, step) {
+  const out = [pts[0].clone()], closed = [...pts, pts[0]]; let acc = 0;
+  for (let i = 1; i < closed.length; i++) {
+    const a = closed[i - 1], b = closed[i], d = a.distanceTo(b);
+    for (let t = step - acc; t <= d; t += step) out.push(a.clone().lerp(b, t / d));
+    acc = (acc + d) % step;
+  }
+  if (out.length > 2 && out.at(-1).distanceTo(out[0]) < step * 0.5) out.pop();
+  return out;
+}
+function material(color) {
+  return {
+    matte: () => new THREE.MeshStandardMaterial({ color, roughness: 0.85 }),
+    gloss: () => new THREE.MeshPhysicalMaterial({ color, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.15 }),
+    chrome: () => new THREE.MeshStandardMaterial({ color, metalness: 1, roughness: 0.16 }),
+    glass: () => new THREE.MeshPhysicalMaterial({ color, transmission: 1, thickness: 1.5, roughness: 0.06, ior: 1.45 }),
+    glow: () => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.9, roughness: 0.5 }),
+  }[S.material]();
+}
+
+const SIZE = 10;
+function buildLetter(glyph) {
+  const g = new THREE.Group(), D = S.depth, contours = glyphContours(glyph, SIZE);
+  if (!contours.length) return g;
+  const face = material(S.face), side = material(S.side), m = new THREE.Matrix4();
+  if (S.treatment === "solid") {
+    const geo = new THREE.ExtrudeGeometry(toShapes(contours), { depth: D, bevelEnabled: S.bevel > 0, bevelThickness: S.bevel * 1.2, bevelSize: S.bevel, bevelSegments: 3, curveSegments: 6 });
+    geo.translate(0, 0, -D / 2);
+    g.add(new THREE.Mesh(geo, [face, side]));
+  } else if (S.treatment === "molecular") {
+    const atoms = [], bonds = [];
+    for (const c of contours) {
+      const pts = resample(c, 1.25), n = pts.length, base = atoms.length;
+      for (const z of [-D / 2, D / 2]) pts.forEach(p => atoms.push(new THREE.Vector3(p.x, p.y, z)));
+      for (let i = 0; i < n; i++) {
+        bonds.push([base + i, base + (i + 1) % n], [base + n + i, base + n + (i + 1) % n]);
+        if (i % 2 === 0) bonds.push([base + i, base + n + i]);
+      }
+    }
+    const am = new THREE.InstancedMesh(new THREE.SphereGeometry(0.26, 16, 12), face, atoms.length);
+    atoms.forEach((p, i) => am.setMatrixAt(i, m.makeTranslation(p)));
+    const bm = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.07, 0.07, 1, 8), side, bonds.length);
+    const up = new THREE.Vector3(0, 1, 0), q = new THREE.Quaternion(), s = new THREE.Vector3();
+    bonds.forEach(([a, b], i) => {
+      const A = atoms[a], B = atoms[b], d = B.clone().sub(A);
+      q.setFromUnitVectors(up, d.clone().normalize());
+      bm.setMatrixAt(i, m.compose(A.clone().add(B).multiplyScalar(0.5), q, s.set(1, d.length(), 1)));
+    });
+    g.add(am, bm);
+  } else {
+    // Terminal cells: rasterise the glyph; one extruded block per filled cell.
+    const bb = glyph.getPath(0, 0, SIZE).getBoundingBox(), cell = 0.55, k = 8, ppu = k / cell;
+    const w = Math.ceil((bb.x2 - bb.x1) / cell) + 2, h = Math.ceil((bb.y2 - bb.y1) / cell) + 2;
+    const cv = Object.assign(document.createElement("canvas"), { width: w * k, height: h * k }), ctx = cv.getContext("2d");
+    const p = glyph.getPath((-bb.x1 + cell) * ppu, (-bb.y1 + cell) * ppu, SIZE * ppu); p.fill = "#fff"; p.draw(ctx);
+    const data = ctx.getImageData(0, 0, cv.width, cv.height).data, cells = [];
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++)
+      if (data[((y * k + k / 2) * cv.width + x * k + k / 2) * 4 + 3] > 128)
+        cells.push([bb.x1 - cell + (x + 0.5) * cell, -(bb.y1 - cell + (y + 0.5) * cell)]);
+    const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(cell * 0.86, cell * 0.86, D), [side, side, side, side, face, face], cells.length);
+    cells.forEach(([x, y], i) => mesh.setMatrixAt(i, m.makeTranslation(x, y, Math.sin(x * 1.7) * Math.cos(y * 1.3) * 0.5)));
+    g.add(mesh);
+  }
+  return g;
+}
+
+let letters = [], layoutWidth = 1, t0 = 0, simT = 0;
+async function rebuild() {
+  try {
+    document.querySelectorAll("[data-ctx]").forEach(el => el.hidden = el.dataset.ctx !== S.context);
+    const { font } = await loadTTF(S.font);
+    status.textContent = DISPLAY[S.font];
+    root.traverse(o => { o.geometry?.dispose(); [o.material].flat().forEach(m => m?.dispose?.()); });
+    root.clear(); letters = [];
+    const text = S.context === "finale" ? "Get in touch" : S.text;
+    const glyphs = font.stringToGlyphs(text), scale = SIZE / font.unitsPerEm;
+    let x = 0; const placed = [];
+    glyphs.forEach((gl, i) => {
+      placed.push({ gl, x });
+      x += gl.advanceWidth * scale + (i < glyphs.length - 1 ? font.getKerningValue(gl, glyphs[i + 1]) * scale : 0);
+    });
+    layoutWidth = x;
+    for (const { gl, x: gx } of placed) {
+      const mesh = buildLetter(gl), holder = new THREE.Group(); holder.add(mesh);
+      const bb = gl.getPath(0, 0, SIZE).getBoundingBox(), cx = (bb.x1 + bb.x2) / 2, cy = -(bb.y1 + bb.y2) / 2;
+      mesh.position.set(-cx, -cy, 0);
+      holder.position.set(gx + cx - x / 2, cy - SIZE * 0.35, 0); root.add(holder);
+      letters.push({ holder, mesh, home: holder.position.clone(), pos: new THREE.Vector3(), vel: new THREE.Vector3(), rot: new THREE.Vector3(), rvel: new THREE.Vector3() });
+    }
+    root.position.y = { none: 2.5, hero: 1.2, finale: 4 }[S.context];
+    resize(); replay();
+    // ?at=<seconds> fast-forwards the animation (used for screenshots).
+    const at = +new URLSearchParams(location.search).get("at");
+    if (at) for (let i = 0; i < at * 240; i++) { simT += 1 / 240; for (const L of letters) step(L, 1 / 240, simT); }
+  } catch (e) { status.textContent = e.message; console.error(e); }
+}
+
+// ---------- motion ----------
+const mulberry = a => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+function reroll() { S.seed = 1 + Math.floor(Math.random() * 9999); save(); replay(); }
+function replay() {
+  t0 = performance.now() / 1000; simT = 0;
+  const rng = mulberry(S.seed), R = () => rng() * 2 - 1, n = letters.length, half = layoutWidth / 2 + 1;
+  letters.forEach((L, i) => {
+    const amt = S.settleAmount, ph = i * 0.55;
+    L.sPos = L.home.clone(); L.sRot = new THREE.Vector3();
+    if (S.settle === "loose") { L.sRot.set(R() * 0.45, R() * 0.7, R() * 0.25).multiplyScalar(amt); L.sPos.add(new THREE.Vector3(0, R() * 0.6, R() * 3).multiplyScalar(amt)); }
+    if (S.settle === "wave") { L.sRot.set(0, Math.sin(ph) * 0.45 * amt, 0); L.sPos.add(new THREE.Vector3(0, Math.sin(ph) * 0.5, Math.cos(ph) * 2).multiplyScalar(amt)); }
+    // Kicks are seeded per letter and on all three axes; some letters get hit much harder.
+    const power = 0.5 + rng() ** 2 * 1.5;
+    L.kickV = new THREE.Vector3(L.home.x / half * 10 + R() * 8, R() * 10, 12 + rng() * 22).multiplyScalar(S.chaos * power);
+    L.kickR = new THREE.Vector3(R(), R(), R()).normalize().multiplyScalar((6 + rng() * 18) * S.chaos * power);
+    L.fireAt = 0.6 + Math.abs(L.home.x) / half * 0.3 + rng() * 0.08 * S.chaos;
+    L.delay = { shockwave: 0, "tumble drop": 0.1 + i * 0.06 + rng() * 0.12 * S.chaos, "type & pop": 0.25 + i * 0.09, assemble: rng() * 0.5 }[S.anim];
+    L.vel.set(0, 0, 0); L.rvel.set(0, 0, 0); L.rot.set(0, 0, 0); L.pos.copy(L.home);
+    L.fired = false; L.landed = false; L.live = false; L.cool = 0; L.mesh.scale.z = 1; L.holder.scale.setScalar(1);
+    L.phase = rng() * 10;
+    if (S.anim === "shockwave") L.mesh.scale.z = 0.02;
+    if (S.anim === "tumble drop") {
+      L.pos.add(new THREE.Vector3(R() * 4 * S.chaos, 20 + rng() * 14, R() * 4 * S.chaos));
+      L.rot.set(R(), R(), R()).multiplyScalar(Math.PI * 0.6 * S.chaos);
+      L.rvel.set(R(), R(), R()).multiplyScalar((2 + rng() * 6) * S.chaos);
+    }
+    if (S.anim === "type & pop") { L.holder.scale.setScalar(0.001); L.mesh.scale.z = 0.02; L.fireAt = L.delay + 0.14; }
+    if (S.anim === "assemble") {
+      L.pos.copy(new THREE.Vector3(R(), R(), R()).normalize().multiplyScalar((18 + rng() * 14) * Math.max(0.3, S.chaos)));
+      L.rot.set(R(), R(), R()).multiplyScalar(Math.PI * S.chaos);
+    }
+  });
+}
+const tmp = new THREE.Vector3(), tgt = new THREE.Vector3();
+function spring(L, dt, kMul = 1) {
+  L.live = true;
+  const k = THREE.MathUtils.lerp(75, 26, S.springiness) * kMul, c = THREE.MathUtils.lerp(11, 2.2, S.springiness);
+  L.vel.addScaledVector(tmp.copy(L.sPos).sub(L.pos), k * dt).multiplyScalar(Math.exp(-c * dt));
+  // Settle to the nearest full turn so spun letters don't unwind backwards.
+  tgt.set(...["x", "y", "z"].map(a => L.sRot[a] + Math.round((L.rot[a] - L.sRot[a]) / (2 * Math.PI)) * 2 * Math.PI));
+  L.rvel.addScaledVector(tmp.copy(tgt).sub(L.rot), k * dt).multiplyScalar(Math.exp(-c * dt));
+}
+function step(L, dt, t) {
+  if (S.anim === "shockwave" || S.anim === "type & pop") {
+    if (S.anim === "type & pop" && t > L.delay) L.holder.scale.setScalar(Math.min(1, L.holder.scale.x + dt * 9));
+    if (!L.fired && t > L.fireAt) {
+      L.fired = true;
+      L.vel.copy(L.kickV).multiplyScalar(S.anim === "type & pop" ? 0.6 : 1);
+      L.rvel.copy(L.kickR).multiplyScalar(S.anim === "type & pop" ? 0.6 : 1);
+    }
+    if (L.fired) { L.mesh.scale.z += (1 - L.mesh.scale.z) * Math.min(1, dt * 12); spring(L, dt); }
+  } else if (S.anim === "tumble drop") {
+    if (t < L.delay) return;
+    if (!L.landed) {
+      L.vel.y -= 70 * dt;
+      if (L.pos.y < L.sPos.y && L.vel.y < 0) {
+        // Impact: bounce up and get knocked around on all three axes.
+        L.pos.y = L.sPos.y; L.vel.y *= -(0.25 + 0.4 * S.springiness); L.landed = true;
+        L.rvel.add(new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(14 * S.chaos));
+      }
+    } else spring(L, dt, 0.8);
+  } else if (t > L.delay) spring(L, dt, 0.6);
+  L.pos.addScaledVector(L.vel, dt); L.rot.addScaledVector(L.rvel, dt);
+}
+
+// ---------- loop ----------
+const mouse = new THREE.Vector2();
+const ndc = new THREE.Vector2(9, 9), lastNdc = new THREE.Vector2(9, 9), raycaster = new THREE.Raycaster();
+addEventListener("pointermove", e => {
+  mouse.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5);
+  ndc.set(mouse.x * 2, -mouse.y * 2);
+});
+// A letter the cursor touches gets pushed in the direction the cursor moves, then springs back.
+function hoverPush(dt) {
+  const v = ndc.clone().sub(lastNdc).divideScalar(Math.max(dt, 1e-3)); lastNdc.copy(ndc);
+  if (!S.hoverPush || ndc.x > 1) return;
+  raycaster.setFromCamera(ndc, camera);
+  const hit = raycaster.intersectObjects(root.children, true)[0];
+  if (!hit) return;
+  const L = letters.find(L => { let o = hit.object; while (o && o !== L.holder) o = o.parent; return o; });
+  if (!L || !L.live || simT < L.cool) return;
+  const speed = Math.min(v.length(), 6), k = S.hoverPush * (0.6 + speed * 0.5);
+  L.vel.add(new THREE.Vector3(v.x * 1.5, v.y * 1.2, -4 - speed * 2).multiplyScalar(k));
+  L.rvel.add(new THREE.Vector3(-v.y * 2.5, v.x * 2.5, (Math.random() - 0.5) * 4).multiplyScalar(k));
+  L.cool = simT + 0.2;
+}
+canvas.addEventListener("click", replay);
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false); composer.setSize(w, h); camera.aspect = w / h; camera.fov = S.fov;
+  camera.updateProjectionMatrix();
+}
+addEventListener("resize", resize);
+const clock = new THREE.Clock(), DEBUG = new URLSearchParams(location.search).has('debug'); let frame = 0;
+renderer.setAnimationLoop(() => {
+  const real = Math.min(clock.getDelta(), 1 / 30), dt = real * S.speed;
+  simT += dt;
+  // Fit the name to ~78% of the width, then orbit by yaw/pitch.
+  const d = Math.max((layoutWidth / 0.78) / (2 * Math.tan(THREE.MathUtils.degToRad(S.fov / 2)) * camera.aspect), 24);
+  const yaw = THREE.MathUtils.degToRad(S.yaw), pitch = THREE.MathUtils.degToRad(S.pitch);
+  camera.position.set(Math.sin(yaw) * Math.cos(pitch) * d, Math.sin(pitch) * d, Math.cos(yaw) * Math.cos(pitch) * d);
+  camera.lookAt(0, 0, 0);
+  hoverPush(real);
+  for (const L of letters) {
+    // Fixed sub-steps keep the springs stable at any time scale.
+    for (let i = 0; i < 4; i++) step(L, dt / 4, simT);
+    const dr = simT > 2 ? S.drift * 0.04 : 0, p = L.phase + simT * 0.8;
+    L.holder.position.copy(L.pos).add(tmp.set(Math.sin(p * 0.7) * dr * 4, Math.sin(p) * dr * 6, Math.cos(p * 0.9) * dr * 8));
+    L.holder.rotation.set(L.rot.x + Math.sin(p * 1.1) * dr, L.rot.y + Math.cos(p * 0.8) * dr, L.rot.z + Math.sin(p * 0.6) * dr * 0.5);
+  }
+  root.rotation.y += (mouse.x * 0.6 * S.mouseTilt - root.rotation.y) * 0.05;
+  root.rotation.x += (mouse.y * 0.4 * S.mouseTilt - root.rotation.x) * 0.05;
+  composer.render();
+  if (DEBUG && (frame++ % 5 === 0)) console.log('dbg', simT.toFixed(2), letters.length, letters[0] && letters[0].pos.toArray().map(v => v.toFixed(2)).join(','));
+});
+
+document.getElementById("ff").innerHTML = String.raw`<b>sebastian@sebk</b> ~ ❯ fastfetch
+
+    .--.       <b>sebastian</b>@<b>sebk</b>
+   |o_o |      ---------------
+   |:_/ |      <b>OS</b>     Arch Linux x86_64
+  //   \ \     <b>WM</b>     Hyprland
+ (|     | )    <b>Org</b>    Orbit NTNU / DevOps
+/'\_   _/` + "`" + String.raw`\   <b>Study</b>  Chemical Eng. @ NTNU
+\___)=(___/    <b>Logo</b>   penguinone (C10H14O)`;
+document.getElementById("links").innerHTML = `~ ❯ ls -l ~/contact
+
+<b>github</b>   -> github.com/sebkaul
+<b>linkedin</b> -> linkedin.com/in/sebkaul
+<b>cv</b>       -> cv.sebk.no`;
+
+applyType(); applyLook(); rebuild();
+window.__lab = { S, replay, rebuild };
+</script>
+</body>
+</html>

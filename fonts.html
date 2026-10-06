@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Font specimens</title>
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=clash-display@700&display=swap">
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=panchang@800&display=swap">
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@800&display=swap">
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@700&display=swap">
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@900&display=swap">
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@800&display=swap">
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=zodiak@401&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,800;125,900&family=Unbounded:wght@700;900&family=Bricolage+Grotesque:opsz,wght@96,800&family=Inter+Tight:wght@800;900&family=Geist+Mono:wght@400;500&family=JetBrains+Mono:wght@400;500&family=IBM+Plex+Mono:wght@400;500&family=Fragment+Mono&family=Instrument+Serif:ital@0;1&family=Fraunces:ital,opsz,wght@1,72,400&family=Newsreader:ital,opsz@1,72&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/commit-mono/index.css">
+<style>
+  :root { --bg:#0b0b0a; --fg:#e6e4da; --dim:#6b6a62; --line:#23231f; --green:#a8d672; --orange:#e8883a; }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; padding:32px 16px 120px; }
+  main { max-width:1100px; margin:0 auto; }
+  h1 { font-size:14px; font-weight:500; color:var(--dim); letter-spacing:.08em; text-transform:uppercase; }
+  h2 { margin:56px 0 8px; font-size:13px; font-weight:500; color:var(--orange); letter-spacing:.1em; text-transform:uppercase; }
+  p.note { color:var(--dim); max-width:70ch; margin-top:8px; }
+  .controls { display:flex; flex-wrap:wrap; gap:12px; margin-top:20px; align-items:center; }
+  .controls input[type=text] { background:#151513; border:1px solid var(--line); color:var(--fg); padding:8px 10px; font:inherit; min-width:260px; }
+  .controls label { color:var(--dim); display:flex; gap:6px; align-items:center; cursor:pointer; }
+  .row { border-top:1px solid var(--line); padding:22px 0; display:grid; grid-template-columns:200px 1fr; gap:16px; align-items:center; cursor:pointer; }
+  .row:hover { background:#11110f; }
+  .row.picked { box-shadow: inset 3px 0 0 var(--green); }
+  .meta { color:var(--dim); font-size:13px; padding-left:12px; }
+  .meta b { color:var(--fg); font-weight:500; display:block; }
+  .meta .bad { color:#d36; }
+  .row.picked .meta b::after { content:"  ✓ picked"; color:var(--green); }
+  .display .s { font-size:clamp(34px,7vw,84px); line-height:1; text-transform:uppercase; overflow-wrap:anywhere; }
+  .display .t { color:var(--dim); margin-top:10px; font-size:18px; }
+  body.extrude .display .s { color:#6f8cff; text-shadow: 1px 1px 0 #3c55c8, 2px 2px 0 #34499f, 3px 3px 0 #2c3e88, 4px 4px 0 #253472, 5px 5px 0 #1e2a5c, 6px 6px 12px #000; }
+  .mono pre { font-family:inherit; font-size:14px; line-height:1.45; white-space:pre; overflow-x:auto; }
+  .mono .g { color:var(--green); } .mono .o { color:var(--orange); } .mono .d { color:var(--dim); }
+  .serif .s { font-size:clamp(26px,4.5vw,44px); font-style:italic; }
+  footer { position:fixed; left:0; right:0; bottom:0; background:#0b0b0aee; border-top:1px solid var(--line); padding:12px 16px; font-size:14px; }
+  footer code { color:var(--green); }
+  @media (max-width:700px) { .row { grid-template-columns:1fr; } .meta { padding-left:0; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Font specimens · chem-3d-personal-website</h1>
+  <p class="note">Click a row to pick it (one per category). Your picks are summarised at the bottom. Paste that line to Claude.
+  A name in red means the font failed to load and you're seeing a fallback.
+  Not here: Berkeley Mono (paid, see berkeleygraphics.com) and Departure Mono (download it from departuremono.com).</p>
+  <div class="controls">
+    <input id="txt" type="text" value="Sebastian Kaul" aria-label="Sample text">
+    <label><input id="ext" type="checkbox"> fake 3D extrusion preview</label>
+  </div>
+
+  <h2>Display: heavy, also used as 3D text</h2>
+  <div id="display"></div>
+  <h2>Mono: terminal and HUD labels only</h2>
+  <div id="mono"></div>
+  <h2>Serif italic: optional, one or two quiet lines</h2>
+  <div id="serif"></div>
+</main>
+<footer id="sum"></footer>
+<script>
+const fonts = {
+  display: [
+    ["Clash Display", 700, "Fontshare"], ["Panchang", 800, "Fontshare · very wide"],
+    ["Cabinet Grotesk", 800, "Fontshare"], ["General Sans", 700, "Fontshare"],
+    ["Satoshi", 900, "Fontshare"], ["Switzer", 800, "Fontshare"],
+    ["Archivo", 900, "Google · expanded width", "font-stretch:125%"],
+    ["Unbounded", 900, "Google"], ["Bricolage Grotesque", 800, "Google"],
+    ["Inter Tight", 900, "Google"],
+  ],
+  mono: [
+    ["Commit Mono", 400, "fontsource"], ["Geist Mono", 400, "Google"],
+    ["JetBrains Mono", 400, "Google"], ["IBM Plex Mono", 400, "Google · current sebk.no"],
+    ["Fragment Mono", 400, "Google"],
+  ],
+  serif: [
+    ["Instrument Serif", 400, "Google"], ["Fraunces", 400, "Google"],
+    ["Newsreader", 400, "Google"], ["Zodiak", 400, "Fontshare"],
+  ],
+};
+const store = { get(){ try { return JSON.parse(localStorage.getItem("picks")) || {}; } catch { return {}; } },
+                set(v){ try { localStorage.setItem("picks", JSON.stringify(v)); } catch {} } };
+let picks = store.get();
+const esc = s => s.replace(/[&<>]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;" }[c]));
+
+function sample(cat, txt) {
+  if (cat === "display") return `<div class="s">${esc(txt)}</div><div class="t">C₁₀H₁₄O · penguinone → carvone → carvacrol · æøå 0123456789</div>`;
+  if (cat === "mono") return `<pre><span class="g">sebastian</span>@<span class="o">sebk</span> ~ ❯ fastfetch
+<span class="g">OS</span>      Arch Linux x86_64
+<span class="g">WM</span>      Hyprland
+<span class="g">Org</span>     Orbit NTNU / DevOps
+<span class="g">Logo</span>    penguinone (C10H14O)
+<span class="d">orbit -> orbitntnu.com    0O il1| {}[] => != æøå</span></pre>`;
+  return `<div class="s">The same atoms, rearranged.</div>`;
+}
+
+function render() {
+  const txt = document.getElementById("txt").value || "Sebastian Kaul";
+  for (const cat of Object.keys(fonts)) {
+    document.getElementById(cat).innerHTML = fonts[cat].map(([name, w, src, extra = ""]) => `
+      <div class="row ${cat} ${picks[cat] === name ? "picked" : ""}" data-cat="${cat}" data-name="${name}">
+        <div class="meta"><b data-font="${name}">${name}</b>${src}</div>
+        <div style="font-family:'${name}',monospace;font-weight:${w};${extra}">${sample(cat, txt)}</div>
+      </div>`).join("");
+  }
+  document.querySelectorAll(".row").forEach(r => r.onclick = () => {
+    const { cat, name } = r.dataset;
+    picks[cat] = picks[cat] === name ? undefined : name; store.set(picks); render();
+  });
+  const fmt = c => picks[c] || "—";
+  document.getElementById("sum").innerHTML = `Picks: display <code>${fmt("display")}</code> · mono <code>${fmt("mono")}</code> · serif <code>${fmt("serif")}</code>`;
+  document.fonts.ready.then(() => {
+    const loaded = new Set([...document.fonts].filter(f => f.status === "loaded").map(f => f.family.replace(/["']/g, "")));
+    document.querySelectorAll("[data-font]").forEach(b => b.classList.toggle("bad", !loaded.has(b.dataset.font)));
+  });
+}
+document.getElementById("txt").oninput = render;
+document.getElementById("ext").onchange = e => document.body.classList.toggle("extrude", e.target.checked);
+render();
+</script>
+</body>
+</html>
