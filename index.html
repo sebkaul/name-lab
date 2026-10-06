@@ -129,7 +129,7 @@ const DEFAULTS = {
   anim: "type & pop", seed: 5560, chaos: 0, springiness: 1, settle: "loose", settleAmount: 0.25, drift: 2, speed: 1.15,
   palette: "Paper (light)", bg: "#efede6", bgStyle: "radial", textColor: "#151513", dim: "#77746a",
   face: "#1a1a18", side: "#8f8b80", accent: "#2b2bff", grain: 0.2, vignette: 0.58, bloom: 0.24,
-  yaw: 1, pitch: 1, fov: 29, mouseTilt: 0.3, hoverPush: 1,
+  yaw: 1, pitch: 1, fov: 29, mouseTilt: 0.3, hoverPush: 1, hoverReach: 1,
   context: "none", heading: "syne", body: "zodiak", mono: "IBM Plex Mono",
 };
 const S = { ...DEFAULTS };
@@ -191,6 +191,7 @@ fCam.add(S, "pitch", -35, 35, 1).name("pitch °");
 fCam.add(S, "fov", 12, 60, 1).onChange(resize);
 fCam.add(S, "mouseTilt", 0, 1, 0.01).name("mouse tilt (whole name)");
 fCam.add(S, "hoverPush", 0, 3, 0.05).name("cursor push (per letter)");
+fCam.add(S, "hoverReach", 0, 3, 0.05).name("cursor reach (grows with speed)");
 const fType = gui.addFolder("Context & type pairing");
 fType.add(S, "context", { "none (pairing strip)": "none", "hero (first screen)": "hero", "finale (get in touch)": "finale" }).onChange(() => rebuild());
 fType.add(S, "heading", inv(DISPLAY)).name("heading font").onChange(applyType);
@@ -392,11 +393,13 @@ async function rebuild(animate = false) {
     });
     layoutWidth = x;
     for (const { gl, x: gx } of placed) {
-      const mesh = buildLetter(gl), holder = new THREE.Group(); holder.add(mesh);
+      const mesh = buildLetter(gl), holder = new THREE.Group();
       const bb = gl.getPath(0, 0, SIZE).getBoundingBox(), cx = (bb.x1 + bb.x2) / 2, cy = -(bb.y1 + bb.y2) / 2;
       mesh.position.set(-cx, -cy, 0);
+      // the letter's bounds in holder space, measured before it has a parent
+      const box = new THREE.Box3().setFromObject(mesh); holder.add(mesh);
       holder.position.set(gx + cx - x / 2, cy - SIZE * 0.35, 0); root.add(holder);
-      letters.push({ holder, mesh, home: holder.position.clone(), pos: new THREE.Vector3(), vel: new THREE.Vector3(), rot: new THREE.Vector3(), rvel: new THREE.Vector3() });
+      letters.push({ holder, mesh, box, home: holder.position.clone(), pos: new THREE.Vector3(), vel: new THREE.Vector3(), rot: new THREE.Vector3(), rvel: new THREE.Vector3() });
     }
     root.position.y = { none: 2.5, hero: 1.2, finale: 4 }[S.context];
     resize(); replay();
@@ -482,18 +485,49 @@ addEventListener("pointermove", e => {
   mouse.set(THREE.MathUtils.clamp(x, -0.5, 0.5), THREE.MathUtils.clamp(y, -0.5, 0.5));
 });
 // A letter the cursor touches gets pushed in the direction the cursor moves, then springs back.
+// Standing still it has to be on the letter; the faster it moves, the further away it still catches letters.
+const corner = new THREE.Vector3(), seg = new THREE.Vector2(), near = new THREE.Vector2();
+function screenRect(L) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let i = 0; i < 8; i++) {
+    corner.set(i & 1 ? L.box.max.x : L.box.min.x, i & 2 ? L.box.max.y : L.box.min.y, i & 4 ? L.box.max.z : L.box.min.z)
+      .applyMatrix4(L.holder.matrixWorld).project(camera);
+    const px = (corner.x + 1) / 2 * innerWidth, py = (1 - corner.y) / 2 * innerHeight;
+    x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
+  }
+  return [x0, y0, x1, y1];
+}
 function hoverPush(dt) {
-  const v = ndc.clone().sub(lastNdc).divideScalar(Math.max(dt, 1e-3)); lastNdc.copy(ndc);
+  const v = ndc.clone().sub(lastNdc).divideScalar(Math.max(dt, 1e-3));
+  const from = new THREE.Vector2((lastNdc.x + 1) / 2 * innerWidth, (1 - lastNdc.y) / 2 * innerHeight);
+  const to = new THREE.Vector2((ndc.x + 1) / 2 * innerWidth, (1 - ndc.y) / 2 * innerHeight);
+  lastNdc.copy(ndc);
   if (!S.hoverPush || !overStage) return;
+  const pxSpeed = Math.hypot(v.x * innerWidth / 2, v.y * innerHeight / 2);
+  const reach = Math.min(pxSpeed * 0.04, 120) * S.hoverReach;
   raycaster.setFromCamera(ndc, camera);
   const hit = raycaster.intersectObjects(root.children, true)[0];
-  if (!hit) return;
-  const L = letters.find(L => { let o = hit.object; while (o && o !== L.holder) o = o.parent; return o; });
-  if (!L || !L.live || simT < L.cool) return;
-  const speed = Math.min(v.length(), 6), k = S.hoverPush * (0.6 + speed * 0.5);
-  L.vel.add(new THREE.Vector3(v.x * 1.5, v.y * 1.2, -4 - speed * 2).multiplyScalar(k));
-  L.rvel.add(new THREE.Vector3(-v.y * 2.5, v.x * 2.5, (Math.random() - 0.5) * 4).multiplyScalar(k));
-  L.cool = simT + 0.2;
+  const speed = Math.min(v.length(), 6);
+  for (const L of letters) {
+    if (!L.live || simT < L.cool) continue;
+    let d = Infinity;
+    if (hit) { let o = hit.object; while (o && o !== L.holder) o = o.parent; if (o) d = 0; }
+    if (d && reach > 0 && from.distanceTo(to) < innerWidth) {
+      // closest point of the cursor's path this frame to the letter's on-screen box, so fast swipes don't skip letters
+      const [x0, y0, x1, y1] = screenRect(L), n = Math.min(Math.ceil(from.distanceTo(to) / 8), 24);
+      for (let i = 0; i <= n; i++) {
+        seg.lerpVectors(from, to, n ? i / n : 1);
+        near.set(THREE.MathUtils.clamp(seg.x, x0, x1), THREE.MathUtils.clamp(seg.y, y0, y1));
+        d = Math.min(d, seg.distanceTo(near));
+      }
+      if (d >= reach) continue;
+    } else if (d) continue;
+    // letters at the edge of the reach get a softer push
+    const k = S.hoverPush * (0.6 + speed * 0.5) * (reach ? 1 - 0.5 * d / reach : 1);
+    L.vel.add(new THREE.Vector3(v.x * 1.5, v.y * 1.2, -4 - speed * 2).multiplyScalar(k));
+    L.rvel.add(new THREE.Vector3(-v.y * 2.5, v.x * 2.5, (Math.random() - 0.5) * 4).multiplyScalar(k));
+    L.cool = simT + 0.2;
+  }
 }
 canvas.addEventListener("click", replay);
 let canvasSize = "";
