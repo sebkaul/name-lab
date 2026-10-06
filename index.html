@@ -8,7 +8,12 @@
   :root { --bg:#0b0b0a; --text:#e6e4da; --dim:#8a877c; --accent:#e6e4da; --head:"lab-telma"; --body:"body-zodiak"; --mono:"Commit Mono"; }
   html, body { height:100%; margin:0; }
   body { background:var(--bg); color:var(--text); overflow:hidden; font-family:var(--body), serif; }
-  #stage { position:fixed; inset:0; }
+  /* the stage sits beside the open panel instead of under it */
+  #stage { position:fixed; inset:0; overflow:hidden; transition:right .35s ease, top .35s ease; }
+  body.panel-open #stage { right:305px; }
+  @media (max-width:640px) {
+    body.panel-open #stage { right:0; top:var(--panel-h, 55vh); }
+  }
   canvas { display:block; width:100%; height:100%; }
   .ov { position:absolute; inset:0; pointer-events:none; }
   #grain { inset:-10%; mix-blend-mode:overlay; animation:grain .3s steps(3) infinite;
@@ -41,9 +46,15 @@
   #pair { position:absolute; left:28px; bottom:26px; display:grid; gap:6px; }
   #pair .h { font-family:var(--head); font-size:clamp(24px,3.4vw,42px); line-height:1.1; }
   #pair .s { font-family:var(--body); font-style:italic; font-size:clamp(16px,1.8vw,22px); opacity:.85; }
-  #status { position:absolute; left:28px; top:18px; font:12px system-ui, sans-serif; color:var(--dim); }
+  #status { position:absolute; right:28px; top:34px; font:12px var(--mono), monospace; color:var(--dim); text-align:right; }
+  #status b { color:var(--accent); font-weight:400; }
   .lil-gui.root { max-height:100vh; overflow-y:auto; --width:290px; }
   [hidden] { display:none !important; }
+  /* phones: full-width panel; the hint sits under its title, so the font label goes below it */
+  @media (max-width:640px) {
+    .lil-gui.root { --width:calc(100vw - 30px); max-height:55vh; }
+    #status { top:58px; } body.panel-open #status { top:18px; }
+  }
 </style>
 <script type="importmap">
 { "imports": {
@@ -132,23 +143,28 @@ const status = document.getElementById("status");
 const gui = new GUI({ title: "Name lab" }).close();
 // the hint points at the closed panel; it hides while the panel is open
 const guiHint = document.getElementById("guihint");
-const syncHint = () => guiHint.hidden = !gui._closed;
+const syncHint = () => { guiHint.hidden = !gui._closed; document.body.classList.toggle("panel-open", !gui._closed); };
 gui.$title.addEventListener("click", syncHint);
+// on phones the stage starts where the panel ends, and follows it as folders open and close
+new ResizeObserver(() => document.body.style.setProperty("--panel-h", gui.domElement.offsetHeight + "px")).observe(gui.domElement);
 guiHint.addEventListener("click", () => { gui.openAnimated(); syncHint(); });
+// every control updates live; the heavier ones are debounced so dragging stays smooth
+const debounce = (fn, ms) => { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+const liveRebuild = debounce(() => rebuild(), 120), liveReplay = debounce(() => replay(), 150);
 const fName = gui.addFolder("Name");
-fName.add(S, "text").onFinishChange(rebuild);
+fName.add(S, "text").onChange(liveRebuild);
 fName.add(S, "font", inv(DISPLAY)).onChange(rebuild).listen();
 fName.add(S, "treatment", ["solid", "molecular", "cells"]).onChange(rebuild);
 fName.add(S, "material", ["matte", "gloss", "chrome", "glass", "glow"]).onChange(rebuild);
-fName.add(S, "depth", 0.2, 6, 0.1).onFinishChange(rebuild);
-fName.add(S, "bevel", 0, 0.5, 0.01).onFinishChange(rebuild);
+fName.add(S, "depth", 0.2, 6, 0.1).onChange(liveRebuild);
+fName.add(S, "bevel", 0, 0.5, 0.01).onChange(liveRebuild);
 const fMotion = gui.addFolder("Motion");
 fMotion.add(S, "anim", ["shockwave", "tumble drop", "type & pop", "assemble"]).name("animation").onChange(replay);
-fMotion.add(S, "seed", 1, 9999, 1).onFinishChange(replay).listen();
-fMotion.add(S, "chaos", 0, 3, 0.05).name("chaos / randomness").onFinishChange(replay);
-fMotion.add(S, "springiness", 0, 1, 0.01).name("springiness (goofy ↔ calm = 1 ↔ 0)").onFinishChange(replay);
+fMotion.add(S, "seed", 1, 9999, 1).onChange(liveReplay).listen();
+fMotion.add(S, "chaos", 0, 3, 0.05).name("chaos / randomness").onChange(liveReplay);
+fMotion.add(S, "springiness", 0, 1, 0.01).name("springiness (goofy ↔ calm = 1 ↔ 0)").onChange(liveReplay);
 fMotion.add(S, "settle", ["loose", "aligned", "wave"]).name("settle pose").onChange(replay);
-fMotion.add(S, "settleAmount", 0, 2, 0.05).name("settle amount").onFinishChange(replay);
+fMotion.add(S, "settleAmount", 0, 2, 0.05).name("settle amount").onChange(liveReplay);
 fMotion.add(S, "drift", 0, 2, 0.05).name("idle drift");
 fMotion.add(S, "speed", 0.2, 2, 0.05).name("time scale");
 fMotion.add({ replay }, "replay").name("▶ replay (space)");
@@ -159,8 +175,8 @@ fLook.addColor(S, "bg").onChange(applyLook).listen();
 fLook.add(S, "bgStyle", ["flat", "radial", "vertical"]).name("background style").onChange(applyLook);
 fLook.addColor(S, "textColor").name("text").onChange(applyLook).listen();
 fLook.addColor(S, "dim").name("dim text").onChange(applyLook).listen();
-fLook.addColor(S, "face").name("letter face").onFinishChange(rebuild).listen();
-fLook.addColor(S, "side").name("letter sides / bonds").onFinishChange(rebuild).listen();
+fLook.addColor(S, "face").name("letter face").onChange(liveRebuild).listen();
+fLook.addColor(S, "side").name("letter sides / bonds").onChange(liveRebuild).listen();
 fLook.addColor(S, "accent").onChange(applyLook).listen();
 fLook.add(S, "grain", 0, 0.5, 0.01).onChange(applyLook);
 fLook.add(S, "vignette", 0, 1, 0.01).onChange(applyLook);
@@ -183,7 +199,8 @@ gui.add({ copy() {
 gui.add({ reset() { try { localStorage.removeItem("namelab2"); } catch {} location.href = location.pathname; } }, "reset").name("reset everything");
 gui.folders.forEach(f => f.close());
 gui.onChange(save);
-function flash(msg) { status.textContent = msg; setTimeout(() => status.textContent = DISPLAY[S.font], 2500); }
+const showFont = () => status.innerHTML = `font: <b>${DISPLAY[S.font]}</b>`;
+function flash(msg) { status.textContent = msg; setTimeout(showFont, 2500); }
 
 addEventListener("keydown", e => {
   if (e.target.closest?.(".lil-gui") && e.target.tagName === "INPUT") return;
@@ -217,7 +234,7 @@ function applyType() {
 }
 
 // ---------- three ----------
-const canvas = document.getElementById("c");
+const canvas = document.getElementById("c"), stage = document.getElementById("stage");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.toneMapping = THREE.NeutralToneMapping;
@@ -357,7 +374,7 @@ async function rebuild() {
   try {
     document.querySelectorAll("[data-ctx]").forEach(el => el.hidden = el.dataset.ctx !== S.context);
     const { font } = await loadTTF(S.font);
-    status.textContent = DISPLAY[S.font];
+    showFont();
     root.traverse(o => { o.geometry?.dispose(); [o.material].flat().forEach(m => m?.dispose?.()); });
     root.clear(); letters = [];
     const text = S.context === "finale" ? "Get in touch" : S.text;
@@ -452,13 +469,14 @@ function step(L, dt, t) {
 const mouse = new THREE.Vector2();
 const ndc = new THREE.Vector2(9, 9), lastNdc = new THREE.Vector2(9, 9), raycaster = new THREE.Raycaster();
 addEventListener("pointermove", e => {
-  mouse.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5);
-  ndc.set(mouse.x * 2, -mouse.y * 2);
+  const r = stage.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
+  ndc.set(x * 2, -y * 2); // beyond ±1 over the panel, so the letters ignore it
+  mouse.set(THREE.MathUtils.clamp(x, -0.5, 0.5), THREE.MathUtils.clamp(y, -0.5, 0.5));
 });
 // A letter the cursor touches gets pushed in the direction the cursor moves, then springs back.
 function hoverPush(dt) {
   const v = ndc.clone().sub(lastNdc).divideScalar(Math.max(dt, 1e-3)); lastNdc.copy(ndc);
-  if (!S.hoverPush || ndc.x > 1) return;
+  if (!S.hoverPush || Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1) return;
   raycaster.setFromCamera(ndc, camera);
   const hit = raycaster.intersectObjects(root.children, true)[0];
   if (!hit) return;
@@ -471,11 +489,12 @@ function hoverPush(dt) {
 }
 canvas.addEventListener("click", replay);
 function resize() {
-  const w = innerWidth, h = innerHeight;
+  const w = stage.clientWidth, h = stage.clientHeight;
   renderer.setSize(w, h, false); composer.setSize(w, h); camera.aspect = w / h; camera.fov = S.fov;
   camera.updateProjectionMatrix();
 }
-addEventListener("resize", resize);
+// follows window resizes and the stage morphing as the panel opens and closes
+new ResizeObserver(resize).observe(stage);
 const clock = new THREE.Clock(), DEBUG = new URLSearchParams(location.search).has('debug'); let frame = 0;
 renderer.setAnimationLoop(() => {
   const real = Math.min(clock.getDelta(), 1 / 30), dt = real * S.speed;
