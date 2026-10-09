@@ -4,6 +4,8 @@ A playground for animated 3D type: real extruded letters built from a font's out
 with three.js and opentype.js, with physics-style animation and a live control panel.
 It is used to design the 3D name for the next [sebk.no](https://sebk.no).
 
+Try it live at **[namelab.sebk.no](https://namelab.sebk.no)**.
+
 - **Treatments:** solid extrusion, molecular (atoms along the outlines, bonds between
   them), terminal cells (letters made of extruded blocks).
 - **Animations:** shockwave, tumble drop, type & pop, assemble. Each is seeded, with
